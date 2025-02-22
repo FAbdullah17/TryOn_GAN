@@ -88,3 +88,4 @@ if __name__ == "__main__":
     for images, _ in loader_deepfashion:
         print("DeepFashion batch shape:", images.shape)
         break
+    
