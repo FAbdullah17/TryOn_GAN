@@ -1,0 +1,14 @@
+torch
+torchvision
+opencv-python
+pillow
+numpy
+matplotlib
+albumentations
+tqdm
+scikit-image
+scikit-learn
+PyYAML
+einops
+torch-optimizer
+torch-lr-finder
