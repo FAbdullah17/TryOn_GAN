@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-
+from utils.data_loader import get_data_loader, viton_path, deepfashion_path, visualize_batch, visualize_sample
+from data_preprocessing import data_transforms, PreprocessedDataset, clean_dataset, visualize_preprocessed_batch
 # Step 1: Residual Block
 class ResidualBlock(nn.Module):
     def __init__(self, dim):
