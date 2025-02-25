@@ -2,7 +2,7 @@ import torch
 import torchvision.transforms as transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
-from utils.data_loader import get_data_loader,viton_path,deepfashion_path
+from utils.data_loader import get_data_loader,viton_path,deepfashion_path,visualize_batch
 from PIL import Image
 import os
 
