@@ -29,7 +29,6 @@ outputs/
 .outputs/
 output_images/
 .output_images/
-static/
 sample_images/
 
 # PyInstaller
