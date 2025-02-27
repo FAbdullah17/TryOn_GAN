@@ -27,6 +27,10 @@ share/python-wheels/
 MANIFEST
 outputs/
 .outputs/
+output_images/
+.output_images/
+static/
+sample_images/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

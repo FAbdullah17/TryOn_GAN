@@ -12,4 +12,7 @@ PyYAML
 einops
 torch-optimizer
 torch-lr-finder
+fastapi
+uvicorn
+python-multipart
 -e .
