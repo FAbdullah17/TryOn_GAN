@@ -1,67 +1,81 @@
-import io
+from fastapi import FastAPI, File, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
+import shutil
 import os
 import torch
-import uvicorn
-from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import HTMLResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from PIL import Image
-from torchvision import transforms
+import torchvision.transforms as transforms
 from model.generator import Generator
+from model.warping import WarpingModule
+from model.parsing import ParsingModule
 
 app = FastAPI()
 
-# Mount static files (HTML, CSS, etc.)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Serve index.html at the root endpoint
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Load models
+generator = Generator().to(DEVICE)
+generator.load_state_dict(torch.load("outputs/model.pth", map_location=DEVICE))
+generator.eval()
+
+warping = WarpingModule().to(DEVICE).eval()
+parsing = ParsingModule().to(DEVICE).eval()
+
+transform = transforms.Compose([
+    transforms.Resize((256, 256)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+])
+
+def virtual_tryon(person_img_path, clothing_img_path, keypoints):
+    """Runs virtual try-on using the generator model."""
+    person_img = transform(Image.open(person_img_path).convert("RGB")).unsqueeze(0).to(DEVICE)
+    clothing_img = transform(Image.open(clothing_img_path).convert("RGB")).unsqueeze(0).to(DEVICE)
+    keypoints = torch.tensor(keypoints).unsqueeze(0).to(DEVICE)
+
+    parsed_human = parsing(person_img)
+    warped_clothing = warping(clothing_img, keypoints)
+
+    if parsed_human.shape[1] != 3:
+        parsed_human = parsed_human.repeat(1, 3, 1, 1)
+    if warped_clothing.shape[1] != 3:
+        warped_clothing = warped_clothing.repeat(1, 3, 1, 1)
+
+    generated_img = generator(parsed_human, warped_clothing)
+    generated_img = generated_img.squeeze(0).detach().cpu()
+    generated_img = transforms.ToPILImage()(generated_img)
+
+    return generated_img
+
 @app.get("/", response_class=HTMLResponse)
-async def read_index():
-    with open("static/index.html", encoding="utf-8") as f:
-        html_content = f.read()
-    return HTMLResponse(content=html_content)
+async def serve_home():
+    """Serves the interactive HTML page."""
+    with open("templates/index.html", "r") as f:
+        return HTMLResponse(content=f.read())
 
-# Set up device (use GPU if available, else CPU)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+@app.post("/tryon/")
+async def tryon(person_img: UploadFile = File(...), clothing_img: UploadFile = File(...)):
+    """Receives images, applies virtual try-on, returns output image."""
+    person_path = os.path.join(UPLOAD_FOLDER, person_img.filename)
+    clothing_path = os.path.join(UPLOAD_FOLDER, clothing_img.filename)
 
-def load_model(checkpoint_path: str):
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    netG = Generator(input_nc=3, output_nc=3, n_residual_blocks=9).to(device)
-    netG.load_state_dict(checkpoint["netG_state_dict"])
-    netG.eval()
-    return netG
+    with open(person_path, "wb") as buffer:
+        shutil.copyfileobj(person_img.file, buffer)
 
-# Load the pretrained generator model from the checkpoint
-model = load_model("outputs/CycleGan.pth")
+    with open(clothing_path, "wb") as buffer:
+        shutil.copyfileobj(clothing_img.file, buffer)
 
-def transform_image(image: Image.Image, image_size: int = 256):
-    transform = transforms.Compose([
-        transforms.Resize((image_size, image_size)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-    ])
-    return transform(image).unsqueeze(0)
+    keypoints = [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6], [0.7, 0.8]]
 
-def denormalize(tensor):
-    return tensor * 0.5 + 0.5
+    output_img = virtual_tryon(person_path, clothing_path, keypoints)
+    output_path = os.path.join(UPLOAD_FOLDER, "result.jpg")
+    output_img.save(output_path)
 
-@app.post("/predict")
-async def predict(file: UploadFile = File(...)):
-    contents = await file.read()
-    image = Image.open(io.BytesIO(contents)).convert("RGB")
-    input_tensor = transform_image(image).to(device)
-    
-    with torch.no_grad():
-        output_tensor = model(input_tensor)
-    
-    output_tensor = denormalize(output_tensor).squeeze(0)
-    output_image = transforms.ToPILImage()(output_tensor.cpu())
-    
-    buf = io.BytesIO()
-    output_image.save(buf, format="PNG")
-    buf.seek(0)
-    
-    return StreamingResponse(buf, media_type="image/png")
+    return FileResponse(output_path, media_type="image/jpeg")
 
 if __name__ == "__main__":
-    uvicorn.run("scripts.deploy:app", host="0.0.0.0", port=8000, reload=True)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,76 +1,40 @@
-import os
 import torch
-import argparse
-import random
-import matplotlib.pyplot as plt
+import torchvision.transforms as transforms
 from PIL import Image
-from torchvision import transforms
-from torchvision.utils import make_grid
 from model.generator import Generator
+from model.warping import WarpingModule
+from model.parsing import ParsingModule
 
-def load_checkpoint(checkpoint_path, device):
-    """Loads the pretrained generator model."""
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    netG = Generator(input_nc=3, output_nc=3, n_residual_blocks=9).to(device)
-    netG.load_state_dict(checkpoint["netG_state_dict"])
-    netG.eval()
-    return netG
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def load_image(image_path, image_size=256):
-    """Loads and preprocesses the input image."""
-    transform = transforms.Compose([
-        transforms.Resize((image_size, image_size)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-    ])
-    image = Image.open(image_path).convert("RGB")
-    return transform(image).unsqueeze(0)
+generator = Generator().to(DEVICE)
+generator.load_state_dict(torch.load("outputs/model.pth", map_location=DEVICE))
+generator.eval()
 
-def denormalize(tensor):
-    """Denormalizes the image tensor for visualization."""
-    return tensor * 0.5 + 0.5
+warping = WarpingModule().to(DEVICE).eval()
+parsing = ParsingModule().to(DEVICE).eval()
 
-def visualize_generated(input_tensor, output_tensor, title_input="Input", title_output="Output"):
-    """Displays input and generated images side by side."""
-    grid_input = make_grid(denormalize(input_tensor), nrow=1, padding=2, normalize=False)
-    grid_output = make_grid(denormalize(output_tensor), nrow=1, padding=2, normalize=False)
-    np_input = grid_input.cpu().numpy().transpose((1, 2, 0))
-    np_output = grid_output.cpu().numpy().transpose((1, 2, 0))
+transform = transforms.Compose([
+    transforms.Resize((256, 256)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+])
 
-    plt.figure(figsize=(10, 5))
-    plt.subplot(1, 2, 1)
-    plt.imshow(np_input)
-    plt.title(title_input)
-    plt.axis("off")
+def virtual_tryon(person_img_path, clothing_img_path, keypoints):
+    person_img = transform(Image.open(person_img_path).convert("RGB")).unsqueeze(0).to(DEVICE)
+    clothing_img = transform(Image.open(clothing_img_path).convert("RGB")).unsqueeze(0).to(DEVICE)
+    keypoints = torch.tensor(keypoints).unsqueeze(0).to(DEVICE)
 
-    plt.subplot(1, 2, 2)
-    plt.imshow(np_output)
-    plt.title(title_output)
-    plt.axis("off")
-
-    plt.show()
-
-def main():
-    parser = argparse.ArgumentParser(description="CycleGAN Inference")
-    parser.add_argument("--checkpoint", type=str, default="outputs/CycleGAN.pth", help="Path to checkpoint file")
-    parser.add_argument("--image_size", type=int, default=256, help="Image size for inference")
-    args = parser.parse_args()
+    parsed_human = parsing(person_img)
+    warped_clothing = warping(clothing_img, keypoints)
     
-    # Select a random image from sample_images directory
-    image_id = random.randint(1, 10)
-    image_path = f"sample_images/img_{image_id:08d}.jpg"
+    if parsed_human.shape[1] != 3:
+        parsed_human = parsed_human.repeat(1, 3, 1, 1)  
+    if warped_clothing.shape[1] != 3:
+        warped_clothing = warped_clothing.repeat(1, 3, 1, 1)
     
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(f"Image {image_path} not found!")
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    netG = load_checkpoint(args.checkpoint, device)
-    input_image = load_image(image_path, args.image_size).to(device)
-
-    with torch.no_grad():
-        output_image = netG(input_image)
-
-    visualize_generated(input_image, output_image, title_input="Test Input", title_output="Generated Output")
-
-if __name__ == "__main__":
-    main()
+    generated_img = generator(parsed_human, warped_clothing)
+    generated_img = generated_img.squeeze(0).detach().cpu()
+    generated_img = transforms.ToPILImage()(generated_img)
+    
+    return generated_img

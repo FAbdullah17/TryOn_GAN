@@ -58,5 +58,4 @@ for epoch in range(EPOCHS):
 
 print("Training complete!")
 
-torch.save(generator.state_dict(), "outputs/generator.pth")
-torch.save(discriminator.state_dict(), "outputs/discriminator.pth")
+torch.save(generator.state_dict(), "outputs/model.pth")

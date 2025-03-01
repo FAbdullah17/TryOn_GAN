@@ -3,7 +3,6 @@ import torch.nn as nn
 import torchvision.models as models
 
 class Generator(nn.Module):
-    """ Generates a new image of the person wearing the warped clothing. """
     def __init__(self):
         super(Generator, self).__init__()
         self.encoder = models.resnet18(pretrained=True)
@@ -18,7 +17,6 @@ class Generator(nn.Module):
         )
 
     def forward(self, parsed_human, warped_clothing):
-        """ Combines parsed human and warped clothing for final output """
         combined = torch.cat([parsed_human, warped_clothing], dim=1)
         encoded = self.encoder(combined)
         output = self.decoder(encoded.view(-1, 512, 1, 1))
