@@ -86,7 +86,7 @@ The Virtual Try-On system follows a structured workflow:
 ## Project Structure
 
 ```bash
-TRYON_GAN/
+Virtual-TryON-System/
 ├── model/                   # Neural network definitions
 │   ├── generator.py         # U-Net generator
 │   ├── discriminator.py     # PatchGAN discriminator
