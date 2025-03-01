@@ -179,9 +179,9 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 For inquiries or collaborations:
 
-- **Email**: contact@virtualtryon.ai
+- **Email**: fahadai.co@gmail.com
 - **GitHub**: [FAbdullah17](https://github.com/FAbdullah17)
-- **LinkedIn**: [Your Profile](www.linkedin.com/in/fahad-abdullah-3bb72a270)
+- **LinkedIn**: [Fahad Abdullah](www.linkedin.com/in/fahad-abdullah-3bb72a270)
 
 🌟 **Support this project by starring the repository!** 🌟
 
